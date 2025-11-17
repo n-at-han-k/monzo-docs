@@ -1,0 +1,53 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Usage: ./bin/generate-openapi
+# Generates openapi.yaml + openapi.json in ./build from all source/includes/_*.md
+
+require 'fileutils'
+require_relative '../lib/monzo_openapi_generator'
+
+# ----------------------------------------------------------------------
+# Resolve paths relative to this script (works even if symlinked or cwd elsewhere)
+# ----------------------------------------------------------------------
+SCRIPT_DIR = File.expand_path(__dir__)
+ROOT_DIR   = File.dirname(SCRIPT_DIR)
+INCLUDES_DIR = File.join(ROOT_DIR, 'source', 'includes')
+BUILD_DIR  = File.join(ROOT_DIR, 'dist')
+
+# ----------------------------------------------------------------------
+# Gather and concatenate all _*.md files (preserving logical order is nice)
+# ----------------------------------------------------------------------
+md_files = Dir[File.join(INCLUDES_DIR, '_*.md')].sort
+
+if md_files.empty?
+  warn "No markdown files found in #{INCLUDES_DIR}"
+  exit 1
+end
+
+puts "Found #{md_files.size} documentation files:"
+md_files.each { |f| puts "  #{File.basename(f)}" }
+
+combined_text = md_files.map { |f| File.read(f) }.join("\n\n")
+
+# ----------------------------------------------------------------------
+# Ensure build directory exists
+# ----------------------------------------------------------------------
+FileUtils.mkdir_p(BUILD_DIR)
+
+# ----------------------------------------------------------------------
+# Write both formats
+# ----------------------------------------------------------------------
+yaml_path = File.join(BUILD_DIR, 'openapi.yaml')
+json_path = File.join(BUILD_DIR, 'openapi.json')
+
+puts "\nGenerating OpenAPI spec..."
+
+MonzoOpenAPIGenerator.dump_yaml(combined_text, File.open(yaml_path, 'w'))
+MonzoOpenAPIGenerator
+
+File.write(json_path, JSON.pretty_generate(MonzoOpenAPIGenerator.generate(combined_text)))
+
+puts "Done!"
+puts "   YAML → #{yaml_path}"
+puts "   JSON → #{json_path}"
